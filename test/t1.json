@@ -1,0 +1,136 @@
+{
+    "network" : {
+        "toMiddleware" : {
+            "host" : "localhost",
+            "port" : 3000
+        },
+        "fromMiddleware" : {
+            "host" : "localhost",
+            "port" : 3001
+        }
+    },
+
+    "servers" : [
+        {
+            "serverID" : 1,
+
+            "commandsQueue" : [
+                ["deposit", 50],
+                ["interest", 1.2],
+                ["withdraw", 100],
+                ["balance"]
+            ],
+
+            "Application": {
+                "toMiddleware" : {
+                    "host" : "localhost",
+                    "port" : 3002
+                },
+                "fromMiddleware" : {
+                    "host" : "localhost",
+                    "port" : 3003
+                }
+            },
+            
+            "Middleware": {
+                "toApplication" : {
+                    "host" : "localhost",
+                    "port" : 3004
+                },
+                "fromApplication" : {
+                    "host" : "localhost",
+                    "port" : 3005
+                },
+                "toNetwork" : {
+                    "host" : "localhost",
+                    "port" : 3006
+                },
+                "fromNetwork" : {
+                    "host" : "localhost",
+                    "port" : 3007
+                }
+                
+            }
+        },
+
+        {
+            "serverID" : 2,
+
+            "commandsQueue" : [
+                ["deposit", 39],
+                ["interest", 1.7],
+                ["balance"]
+            ],
+
+            "Application": {
+                "toMiddleware" : {
+                    "host" : "localhost",
+                    "port" : 3008
+                },
+                "fromMiddleware" : {
+                    "host" : "localhost",
+                    "port" : 3009
+                }
+            },
+            
+            "Middleware": {
+                "toApplication" : {
+                    "host" : "localhost",
+                    "port" : 3010
+                },
+                "fromApplication" : {
+                    "host" : "localhost",
+                    "port" : 3011
+                },
+                "toNetwork" : {
+                    "host" : "localhost",
+                    "port" : 3012
+                },
+                "fromNetwork" : {
+                    "host" : "localhost",
+                    "port" : 3013
+                }
+            }
+        },
+
+        {
+            "serverID" : 3,
+
+            "commandsQueue" : [
+                ["interest", 1.1],
+                ["withdraw", 150],
+                ["balance"]
+            ],
+
+            "Application": {
+                "toMiddleware" : {
+                    "host" : "localhost",
+                    "port" : 3014
+                },
+                "fromMiddleware" : {
+                    "host" : "localhost",
+                    "port" : 3015
+                }
+            },
+            
+            "Middleware": {
+                "toApplication" : {
+                    "host" : "localhost",
+                    "port" : 3016
+                },
+                "fromApplication" : {
+                    "host" : "localhost",
+                    "port" : 3017
+                },
+                "toNetwork" : {
+                    "host" : "localhost",
+                    "port" : 3018
+                },
+                "fromNetwork" : {
+                    "host" : "localhost",
+                    "port" : 3019
+                }
+            }
+        }
+    ]
+}
