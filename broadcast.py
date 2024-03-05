@@ -2,7 +2,6 @@ import time
 import random
 import threading
 import heapq
-import logging
 import sys
 import os
 import json
@@ -46,31 +45,62 @@ Application layer:
 commandsQueue: a list of commands to be executed, such as
     [('deposit', 100), ('withdraw', 50), ('interest', 1.2), ('balance')]
 """
+
+def connectAddr(addr):
+    host, port = addr
+    host = socket.gethostbyname(host)
+    print(f"Connecting to {host}:{port}")
+    return (host, port)
 class Application:
     def __init__(self, serverID, 
-                 UpHost, UpPort, 
-                 DownHost, DownPort, 
+                 toMiddlewareAddr,
+                 fromMiddlewareAddr,
                  commandsQueue):
         self.serverID = serverID
+        threading.Thread(target=self.listenfromMiddleware, args=(fromMiddlewareAddr,)).start()
+
         self.commandsQueue = commandsQueue
+        self.toMiddlewareAddr = toMiddlewareAddr
 
-        # set up socket for listening to the middleware layer
-        self.ApplicationUpSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.ApplicationUpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.ApplicationUpSocket.bind((UpHost, UpPort))
-        self.ApplicationUpSocket.listen(1) # only allow one connection from the middleware layer
+    def listenfromMiddleware(self, addr):
+        """
+        listen to the middleware layer
+        """
+        self.AppfromMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.AppfromMiddlewareSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.AppfromMiddlewareSocket.bind(addr)
+        self.AppfromMiddlewareSocket.listen()
+        print(f"Server {self.serverID}'s Application start listening from Middleware on port {addr}")
 
-        self.toMiddlewareHost = DownHost
-        self.toMiddlewarePort = DownPort
+        while 1:
+            sock, addr = self.AppfromMiddlewareSocket.accept()
+            threading.Thread(target=self.handleMiddleware, args=(sock, addr)).start()
 
+    def handleMiddleware(self, socket, addr):
+        """
+        handle messages from the middleware layer
+        """
+        while 1:
+            data = socket.recv(1024)
+            message = data.decode()
+            print('Received message: {}'.format(message))
+        T
+        # TODO: figure out what to do with the message
+    
+    def sendtoMiddleware(self, addr, message):
+        """
+        send message to the middleware layer
+        """
+        self.ApptoMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print(f"Connecting to {addr}")
+        self.ApptoMiddlewareSocket.connect(addr)
+        self.ApptoMiddlewareSocket.sendall(message.encode())
+        print(f"Server {self.serverID} sent message to Middleware: {message}")
+        self.ApptoMiddlewareSocket.close()
 
-        self.logger = logging.getLogger('process{}'.format(self.serverID))
-        self.logger.setLevel(logging.DEBUG)
-        self.logger.addHandler(logging.StreamHandler())
-        self.logger.info('Process {} started'.format(self.serverID))
     
     def sendCommand(self, command):
-        self.ApplicationDownSocket.sendall(command.encode())
+        self.sendtoMiddleware(self.toMiddlewareAddr, command)
 
     def deposit(self, amount):
         message = 'deposit {}'.format(amount)
@@ -89,18 +119,6 @@ class Application:
         self.sendCommand(message)
 
     def run(self):
-        # wait for the middleware layer to connect
-        try:
-            middlewareSocket, addr = self.ApplicationUpSocket.accept()
-            self.logger.info('Connected to {}'.format(addr))
-        except Exception as e:
-            self.logger.error('Could not connect to middleware layer')
-            self.logger.error(e)
-            return
-
-        self.ApplicationDownSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.ApplicationDownSocket.connect((self.toMiddlewareHost, self.toMiddlewarePort))
-        
         for command in self.commandsQueue:
             if command[0] == 'deposit':
                 self.deposit(command[1])
@@ -111,13 +129,7 @@ class Application:
             elif command[0] == 'balance':
                 self.balance()
             else:
-                self.logger.error('Unknown command: {}'.format(command[0]))
                 print('Unknown command: {}'.format(command[0]))
-
-            response = middlewareSocket.recv(1024)
-            self.logger.info('Received response: {}'.format(response))
-            print('Received response: {}'.format(response))
-
 
 
 """
@@ -134,33 +146,19 @@ We should have two(x2) sockets, one for communication with application layer and
 class Middleware:
     def __init__(self, 
                 serverID,
-                applicationUpHost,
-                applicationUpPort,
-                applicationDownHost,
-                applicationDownPort,
-                networkUpHost,
-                networkUpPort,
-                networkDownHost,
-                networkDownPort):
+                toApplicationAddr,
+                fromApplicationAddr,
+                toNetworkAddr,
+                fromNetworkAddr):
         
         self.serverID = serverID
 
-        self.toApplicationHost = applicationUpHost
-        self.toApplicationPort = applicationUpPort
-        self.toNetworkHost = networkDownHost
-        self.toNetworkPort = networkDownPort
+        threading.Thread(target=self.listenfromApplication, args=(fromApplicationAddr,)).start()
+        threading.Thread(target=self.listenfromNetwork, args=(fromNetworkAddr,)).start()
 
-        self.applicationDownSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.applicationDownSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.applicationDownSocket.bind((applicationDownHost, applicationDownPort))      
-        self.applicationDownSocket.listen(1)
+        self.toApplicationAddr = toApplicationAddr
+        self.toNetworkAddr = toNetworkAddr 
 
-
-
-        self.networkUpSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.networkUpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.networkUpSocket.bind((networkUpHost, networkUpPort))
-        self.networkUpSocket.listen(1)
 
         self.balance = 1000   # initial balance of the bank account of some poor guy
         self.queue = [] # to store all messages received
@@ -170,135 +168,81 @@ class Middleware:
         self.logicalTime = 0 # logical time of the server
         self.logicalTimeLock = threading.Lock() # to lock the logical time
 
-        self.logger = logging.getLogger('process{}'.format(self.serverID))
-        self.logger.setLevel(logging.DEBUG)
-        self.logger.addHandler(logging.StreamHandler())
 
-    def listenApplication(self):
+    def listenfromApplication(self, addr):
         """
-        listen to the application layer
+        listen from the application layer
         """
-        try:
-            applicationSocket, addr = self.applicationDownSocket.accept()
-            self.logger.info('Connected to {}'.format(addr))
-        except Exception as e:
-            self.logger.error('Could not connect to application layer')
-            self.logger.error(e)
-            return
+        self.MiddlefromApplicationSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.MiddlefromApplicationSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.MiddlefromApplicationSocket.bind(addr)
+        self.MiddlefromApplicationSocket.listen()
+        print(f"Server {self.serverID}'s Middleware start listening from Application on port {addr}")
 
         while 1:
-            data = applicationSocket.recv(1024)
-            message = data.decode()
-            self.logger.info('Received message: {}'.format(message))
-            print('Received message: {}'.format(message))
-            self.multicast(message)
+            sock, addr = self.MiddlefromApplicationSocket.accept()
+            threading.Thread(target=self.handleApplication, args=(sock, addr)).start()
 
-    def sendApplication(self, message):
+    def handleApplication(self, socket, addr):
+        """
+        handle messages from the application layer
+        """
+        while 1:
+            data = socket.recv(1024)
+            message = data.decode()
+            print('Received message: {}'.format(message))
+            # self.multicast(message)
+            # TODO: figure out what to do with the message
+
+    def listenfromNetwork(self, addr):
+        """
+        listen from the network layer
+        """
+        self.MiddlefromNetworkSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.MiddlefromNetworkSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.MiddlefromNetworkSocket.bind(addr)
+        self.MiddlefromNetworkSocket.listen()
+        print(f"Server {self.serverID}'s Middleware start listening from Network on port {addr}")
+
+        while 1:
+            sock, addr = self.MiddlefromNetworkSocket.accept()
+            threading.Thread(target=self.handleNetwork, args=(sock, addr)).start()
+    
+    def handleNetwork(self, socket, addr):
+        """
+        handle messages from the network layer
+        """
+        while 1:
+            data = socket.recv(1024)
+            message = data.decode()
+            print('Received message: {}'.format(message))
+            # self.multicast(message)
+
+
+    def sendtoApplication(self, addr, message):
         """
         send message to the application layer
         """
-        self.applicationUpSocket.sendall(message.encode())
+        self.MiddltoApplicationSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.MiddltoApplicationSocket.connect(addr)
+        self.MiddltoApplicationSocket.sendall(message.encode())
+        print(f"Server {self.serverID} sent message to Application: {message}")
+        self.MiddltoApplicationSocket.close()
 
-    def listenNetwork(self):
-        """
-        listen to the network layer
-        """
-        try:
-            networkSocket, addr = self.networkUpSocket.accept()
-            self.logger.info('Connected to {}'.format(addr))
-        except Exception as e:
-            self.logger.error('Could not connect to network layer')
-            self.logger.error(e)
-            return
-
-        while 1:
-            data = networkSocket.recv(1024)
-            message = data.decode()
-            self.logger.info('Received message: {}'.format(message))
-            print('Received message: {}'.format(message))
-            self.receive(message)
-
-    def sendNetwork(self, message):
+    def sendtoNetwork(self, addr, message):
         """
         send message to the network layer
         """
-        self.networkDownSocket.sendall(message.encode())
-
-    def multicast(self, message):
-        """
-        multicast message to all processes
-        """
-        with self.logicalTimeLock:
-            self.logicalTime += 1
-            message = '{} {}'.format(self.logicalTime, message)
-
-        self.sendNetwork(message)
-
-    def receive(self, message):
-        """
-        receive message from the network layer
-        """
-        with self.queueLock:
-            heapq.heappush(self.queue, message)
-            self.logger.info('Added message to queue: {}'.format(message))
-            print('Added message to queue: {}'.format(message))
-
-        self.multicastAck(message)
-
-    def multicastAck(self, message):
-        """
-        multicast ack to all processes
-        """
-        with self.logicalTimeLock:
-            self.logicalTime += 1
-            ack = '{} {}'.format(self.logicalTime, message)
-        self.sendNetwork(ack)
-
-    def deliver(self, message):
-        """
-        deliver message to the application layer
-        """
-        self.sendApplication(message)
-
-    def listenAcks(self):
-        """
-        listen to the network layer for acks
-        """
-        try:
-            networkSocket, addr = self.networkUpSocket.accept()
-            self.logger.info('Connected to {}'.format(addr))
-        except Exception as e:
-            self.logger.error('Could not connect to network layer')
-            self.logger.error(e)
-            return
-
-        while 1:
-            data = networkSocket.recv(1024)
-            ack = data.decode()
-            self.logger.info('Received ack: {}'.format(ack))
-            print('Received ack: {}'.format(ack))
-            self.receiveAck(ack)
+        self.MiddltoNetworkSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.MiddltoNetworkSocket.connect(addr)
+        self.MiddltoNetworkSocket.sendall(message.encode())
+        print(f"Server {self.serverID} sent message to Network: {message}")
+        self.MiddltoNetworkSocket.close()
 
     def run(self):
-        # connect to application layer with upstream and downstream sockets
-        self.applicationUpSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.applicationUpSocket.connect((self.toApplicationHost, self.toApplicationPort))
-
-        # connect to network layer with upstream and downstream sockets
-        self.networkDownSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.networkDownSocket.connect((self.toNetworkHost, self.toNetworkPort))
-
-        # start all threads
-        applicationThread = threading.Thread(target=self.listenApplication).start()
-        networkThread = threading.Thread(target=self.listenNetwork).start()
-        acksThread = threading.Thread(target=self.listenAcks).start()
-
-        applicationThread.join()
-        networkThread.join()
-        acksThread.join()
-
+        self.sendtoApplication(self.toApplicationAddr, 'Hello from Middleware')
+        self.sendtoNetwork(self.toNetworkAddr, 'Hello from Middleware')
     
-
 
 """
 Network layer:
@@ -306,109 +250,63 @@ Network layer:
 2. send messages to middleware layer
 """
 class Network:
-    def __init__(self, serverList, thisServer):
+    def __init__(self, serverList,
+                 fromMiddlewareAddr      
+                 ):
         """
-        serverList: list of (ID, UpHost, UpPort, DownHost, DownPort) tuples for all servers
-        thisServer: (UpHost, UpPort, DownHost, DownPort) tuple for this server of the Network layer
+        serverList: list of (ID, fromNetworkHost, fromNetworkPort, toNetworkHost, toNetworkPort) tuples for all servers
         """
-        self.serverUpList = [server[1:3] for server in serverList if server != thisServer]
-        self.serverDownList = [server[3:] for server in serverList if server != thisServer]
-        self.UpHost, self.UpPort, self.DownHost, self.DownPort = thisServer
+        self.serverList = serverList
 
-        self.UpConnections = [] # to store all connections to other servers
-        self.UpConnectionsLock = threading.Lock()
-        self.DownConnections = [] # to store all connections from other servers
-        self.DownConnectionsLock = threading.Lock() # to lock the connections list to prevent the race condition
-        self.threads = []
-        self.threadsLock = threading.Lock()
+        threading.Thread(target=self.listenfromMiddleware, args=(fromMiddlewareAddr, len(serverList))).start()
 
-        self.logger = logging.getLogger('network') # create a logger for the network layer
-        self.logger.setLevel(logging.DEBUG) # set the logging level to debug
-        self.logger.addHandler(logging.StreamHandler()) # add a stream handler to the logger
-        self.logger.info('Network started') # log that the network layer has started
+        self.toConnections = [] # to store all connections to other servers
+        self.toConnectionsLock = threading.Lock()
+        self.fromConnections = [] # to store all connections from other servers
+        self.fromConnectionsLock = threading.Lock() # to lock the connections list to prevent the race condition
+        # self.threads = []
+        # self.threadsLock = threading.Lock()
 
-        self.NetworkDownSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.NetworkDownSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        print((self.DownHost, self.DownPort))
-        self.NetworkDownSocket.bind((self.DownHost, self.DownPort))
-        self.NetworkDownSocket.listen(len(serverList)) # we allow it to connect to all other servers
-        self.NetworkDownSocket.settimeout(1)
-
-
-    def accept(self):
+    def listenfromMiddleware(self, addr, numServers):
         """
-        connect to a server's middleware layer
+        listen from the middleware layer
         """
-        try: 
-            clientSocket, addr = self.NetworkDownSocket.accept()
+        self.NetworkfromMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.NetworkfromMiddlewareSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.NetworkfromMiddlewareSocket.bind(addr)
+        self.NetworkfromMiddlewareSocket.listen(numServers)
+        print(f"Network start listening from Servers' Middleware on port {addr}")
 
-            if addr not in self.serverDownList:
-                self.logger.error('Connection from unknown server {}'.format(addr))
-                return
+        while 1:
+            sock, addr = self.NetworkfromMiddlewareSocket.accept()
+            with self.fromConnectionsLock:
+                self.fromConnections.append(sock)
+            threading.Thread(target=self.handleMiddleware, args=(sock, addr)).start()
+
+    def handleMiddleware(self, socket, addr):
+        """
+        handle messages from the middleware layer
+        """
+        while 1:
+            data = socket.recv(1024)
+            message = data.decode()
+            print('Received message: {}'.format(message))
             
-            with self.DownConnectionsLock:
-                self.DownConnections.append(clientSocket)
-                self.logger.info('Connected to {}'.format(addr))
-                print('Connected to {}'.format(addr))
-            self.logger.info('Connected to {}'.format(addr))
-            print('Connected to {}'.format(addr))
-
-        except Exception as e:
-            self.logger.error('Could not accept connection from {}'.format(addr))
-
-    
-    def broadcast(self, message):
+    def sendtoMiddleware(self, id, addr, message):
         """
-        broadcast a message to all servers' middleware layers
+        send message to the middleware layer
         """
-        # before broadcasting, check if all connections are established
-        for clientSocket in self.UpConnections:
-            clientSocket.sendall(message.encode())
-            self.logger.info('Sent message: {} to {}'.format(message, clientSocket.getpeername()))
-            print('Sent message: {} to {}'.format(message, clientSocket.getpeername()))
-
-    def handleClient(self, clientSocket):
-        """
-        receive messages from a server's middleware layer
-        """
-        try:
-            while 1:
-                data = clientSocket.recv(1024)
-                message = data.decode()
-                self.logger.info('Received message: {}'.format(message))
-                print('Received message: {}'.format(message))
-                self.broadcast(message)
-        except Exception as e:
-            self.logger.error('Error receiving message from {}'.format(clientSocket.getpeername()))
-            self.logger.error(e)
-        finally:
-                clientSocket.close()
+        self.NetworktoMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.NetworktoMiddlewareSocket.connect(addr)
+        self.NetworktoMiddlewareSocket.sendall(message.encode())
+        print(f"Network sent message to Server {id}'s Middleware: {message}")
+        self.NetworktoMiddlewareSocket.close()
 
     def run(self):
-        # wait for all connections (to the middleware) to be established
-        while len(self.UpConnections) < len(self.serverUpList):
-            for server in self.serverUpList:
-                try:
-                    clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    clientSocket.connect(server)
-                    with self.UpConnectionsLock:
-                        self.UpConnections.append(clientSocket)
-                except Exception as e:
-                    self.logger.error('Could not connect to {}'.format(server))
-                    self.logger.error(e)
-                    time.sleep(1)
-                    continue
-        
-        self.logger.info('All connections established')
-        print('All connections established')
-
-        for clientSocket in self.UpConnections:
-            thread = threading.Thread(target=self.handleClient, args=(clientSocket,)).start()
-            with self.threadsLock:
-                self.threads.append(thread)
-
-        for thread in self.threads:
-            thread.join()
+        for middleware in self.serverList:
+            middlewareID = middleware[0]
+            toMiddlewareAddr = (middleware[1], middleware[2])
+            self.sendtoMiddleware(middlewareID, toMiddlewareAddr, 'Hello from Network')
 
 
 if __name__ == '__main__':
@@ -419,73 +317,82 @@ if __name__ == '__main__':
     with open('./test/' + sys.argv[1], 'r') as f:
         data = json.load(f)
 
-    network = data['network']
-    networkUpHost = network['toMiddleware']['host']
-    networkUpPort = network['toMiddleware']['port']
-    networkDownHost = network['fromMiddleware']['host']
-    networkDownPort = network['fromMiddleware']['port']
-
-    # to store the connections between servers' middleware layers and network layers
     servers = data['servers']
-    serverList = []
-    for server in servers:
-        serverID = server['serverID']
-        toNetworkHost = server['Middleware']['toNetwork']['host']
-        toNetworkPort = server['Middleware']['toNetwork']['port']
-        fromNetworkHost = server['Middleware']['fromNetwork']['host']
-        fromNetworkPort = server['Middleware']['fromNetwork']['port']
-        serverList.append((serverID, fromNetworkHost, fromNetworkPort, toNetworkHost, toNetworkPort))
-
-    # start the network layer
-    print(serverList)
-    print((networkUpHost, networkUpPort, networkDownHost, networkDownPort) )
-    network = Network(serverList, (networkUpHost, networkUpPort, networkDownHost, networkDownPort))
-
-    # start the middleware layer
-    middlewares = []
-    for server in servers:
-        serverID = server['serverID']
-        ApplicationUpHost = server['Middleware']['toApplication']['host']
-        ApplicationUpPort = server['Middleware']['toApplication']['port']
-
-        ApplicationDownHost = server['Middleware']['fromApplication']['host']
-        ApplicationDownPort = server['Middleware']['fromApplication']['port']
-
-        networkUpHost = server['Middleware']['toNetwork']['host']
-        networkUpPort = server['Middleware']['toNetwork']['port']
-
-        networkDownHost = server['Middleware']['fromNetwork']['host']
-        networkDownPort = server['Middleware']['fromNetwork']['port']
-
-        middleware = Middleware(serverID, 
-                                ApplicationUpHost, ApplicationUpPort, ApplicationDownHost, ApplicationDownPort, 
-                                networkUpHost, networkUpPort, networkDownHost, networkDownPort)
-        middlewares.append(middleware)
-        
 
     # start the application layer
     applications = []
     for server in servers:
         serverID = server['serverID']
+        toMiddlewareHost = server['Application']['toMiddleware']['host']
+        toMiddlewareHost = socket.gethostbyname(toMiddlewareHost)
+        toMiddlewarePort = server['Application']['toMiddleware']['port']
+
+        fromMiddlewareHost = server['Application']['fromMiddleware']['host']
+        fromMiddlewareHost = socket.gethostbyname(fromMiddlewareHost)
+        fromMiddlewarePort = server['Application']['fromMiddleware']['port']
         commandsQueue = server['commandsQueue']
-        ApplicationUpHost = server['Application']['fromMiddleware']['host']
-        ApplicationUpPort = server['Application']['fromMiddleware']['port']
-
-        ApplicationDownHost = server['Application']['toMiddleware']['host']
-        ApplicationDownPort = server['Application']['toMiddleware']['port']
-
         application = Application(serverID, 
-                                ApplicationUpHost, ApplicationUpPort, ApplicationDownHost, ApplicationDownPort, 
-                                commandsQueue)
+                                  toMiddlewareAddr=(toMiddlewareHost, toMiddlewarePort),
+                                  fromMiddlewareAddr=(fromMiddlewareHost, fromMiddlewarePort),
+                                  commandsQueue=commandsQueue)
         applications.append(application)
 
-    # start all threads
-    networkThread = threading.Thread(target=network.run).start()
-    for middleware in middlewares:
-        middlewareThread = threading.Thread(target=middleware.run).start()
+    # start the middleware layer
+    middlewares = []
+    for server in servers:
+        serverID = server['serverID']
+        toApplicationHost = server['Middleware']['toApplication']['host']
+        toApplicationHost = socket.gethostbyname(toApplicationHost)
+        toApplicationPort = server['Middleware']['toApplication']['port']
 
+        fromApplicationHost = server['Middleware']['fromApplication']['host']
+        fromApplicationHost = socket.gethostbyname(fromApplicationHost)
+        fromApplicationPort = server['Middleware']['fromApplication']['port']
+
+        toNetworkHost = server['Middleware']['toNetwork']['host']
+        toNetworkHost = socket.gethostbyname(toNetworkHost)
+        toNetworkPort = server['Middleware']['toNetwork']['port']
+
+        fromNetworkHost = server['Middleware']['fromNetwork']['host']
+        fromNetworkHost = socket.gethostbyname(fromNetworkHost)
+        fromNetworkPort = server['Middleware']['fromNetwork']['port']
+
+
+        middleware = Middleware(serverID, 
+                                toApplicationAddr=(toApplicationHost, toApplicationPort),
+                                fromApplicationAddr=(fromApplicationHost, fromApplicationPort),
+                                toNetworkAddr=(toNetworkHost, toNetworkPort),
+                                fromNetworkAddr=(fromNetworkHost, fromNetworkPort))
+        middlewares.append(middleware)
+
+
+    # start the network layer
+    network = data['network']
+    # toMiddlewareAddr = (network['toMiddleware']['host'], network['toMiddleware']['port'])
+    fromMiddlewareAddr = (network['fromMiddleware']['host'], network['fromMiddleware']['port'])
+
+    # to store the connections between servers' middleware layers and network layers
+
+    serverList = []
+    for server in servers:
+        serverID = server['serverID']
+        toNetworkHost = server['Middleware']['toNetwork']['host']
+        toNetworkHost = socket.gethostbyname(toNetworkHost)
+        toNetworkPort = server['Middleware']['toNetwork']['port']
+
+        fromNetworkHost = server['Middleware']['fromNetwork']['host']
+        fromNetworkHost = socket.gethostbyname(fromNetworkHost)
+        fromNetworkPort = server['Middleware']['fromNetwork']['port']
+        serverList.append((serverID, fromNetworkHost, fromNetworkPort, toNetworkHost, toNetworkPort))
+
+    network = Network(serverList, fromMiddlewareAddr)
+
+    time.sleep(2)
     for application in applications:
-        applicationThread = threading.Thread(target=application.run).start()
+        application.run()
+    for middleware in middlewares:
+        middleware.run()
+    network.run()
 
     # networkThread.join()
     # for middleware in middlewares:

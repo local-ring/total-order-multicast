@@ -1,9 +1,5 @@
 {
     "network" : {
-        "toMiddleware" : {
-            "host" : "localhost",
-            "port" : 3000
-        },
         "fromMiddleware" : {
             "host" : "localhost",
             "port" : 3001
@@ -35,19 +31,19 @@
             "Middleware": {
                 "toApplication" : {
                     "host" : "localhost",
-                    "port" : 3004
+                    "port" : 3003
                 },
                 "fromApplication" : {
                     "host" : "localhost",
-                    "port" : 3005
+                    "port" : 3002
                 },
                 "toNetwork" : {
                     "host" : "localhost",
-                    "port" : 3006
+                    "port" : 3001
                 },
                 "fromNetwork" : {
                     "host" : "localhost",
-                    "port" : 3007
+                    "port" : 3004
                 }
                 
             }
@@ -65,30 +61,30 @@
             "Application": {
                 "toMiddleware" : {
                     "host" : "localhost",
-                    "port" : 3008
+                    "port" : 3005
                 },
                 "fromMiddleware" : {
                     "host" : "localhost",
-                    "port" : 3009
+                    "port" : 3006
                 }
             },
             
             "Middleware": {
                 "toApplication" : {
                     "host" : "localhost",
-                    "port" : 3010
+                    "port" : 3006
                 },
                 "fromApplication" : {
                     "host" : "localhost",
-                    "port" : 3011
+                    "port" : 3005
                 },
                 "toNetwork" : {
                     "host" : "localhost",
-                    "port" : 3012
+                    "port" : 3001
                 },
                 "fromNetwork" : {
                     "host" : "localhost",
-                    "port" : 3013
+                    "port" : 3007
                 }
             }
         },
@@ -105,30 +101,30 @@
             "Application": {
                 "toMiddleware" : {
                     "host" : "localhost",
-                    "port" : 3014
+                    "port" : 3008
                 },
                 "fromMiddleware" : {
                     "host" : "localhost",
-                    "port" : 3015
+                    "port" : 3009
                 }
             },
             
             "Middleware": {
                 "toApplication" : {
                     "host" : "localhost",
-                    "port" : 3016
+                    "port" : 3009
                 },
                 "fromApplication" : {
                     "host" : "localhost",
-                    "port" : 3017
+                    "port" : 3008
                 },
                 "toNetwork" : {
                     "host" : "localhost",
-                    "port" : 3018
+                    "port" : 3001
                 },
                 "fromNetwork" : {
                     "host" : "localhost",
-                    "port" : 3019
+                    "port" : 3010
                 }
             }
         }
