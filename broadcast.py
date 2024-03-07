@@ -46,11 +46,6 @@ commandsQueue: a list of commands to be executed, such as
     [('deposit', 100), ('withdraw', 50), ('interest', 1.2), ('balance')]
 """
 
-def connectAddr(addr):
-    host, port = addr
-    host = socket.gethostbyname(host)
-    print(f"Connecting to {host}:{port}")
-    return (host, port)
 class Application:
     def __init__(self, serverID, 
                  toMiddlewareAddr,
@@ -70,7 +65,7 @@ class Application:
         self.AppfromMiddlewareSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.AppfromMiddlewareSocket.bind(addr)
         self.AppfromMiddlewareSocket.listen()
-        print(f"Server {self.serverID}'s Application start listening from Middleware on port {addr}")
+        print(f"Server {self.serverID}'s application start listening from Middleware on port {addr}")
 
         while 1:
             sock, addr = self.AppfromMiddlewareSocket.accept()
@@ -83,8 +78,8 @@ class Application:
         while 1:
             data = socket.recv(1024)
             message = data.decode()
-            print('Received message: {}'.format(message))
-        T
+            print(f"Server {self.serverID}'s application received message: {message}")
+    
         # TODO: figure out what to do with the message
     
     def sendtoMiddleware(self, addr, message):
@@ -95,7 +90,7 @@ class Application:
         print(f"Connecting to {addr}")
         self.ApptoMiddlewareSocket.connect(addr)
         self.ApptoMiddlewareSocket.sendall(message.encode())
-        print(f"Server {self.serverID} sent message to Middleware: {message}")
+        print(f"Server {self.serverID}'s application sent message to Middleware: {message}")
         self.ApptoMiddlewareSocket.close()
 
     
