@@ -40,7 +40,7 @@ We can rule out the second possibility, because in this case, (N,j) is not the h
 
 In the first case, it can only happen when B has not received (M,i), otherwise it will be in the head of queue due to i < j. 
 
-Now suppose the message (M, i) was broadcasted by a server, say C (C can be A or B, for more general sake, we use letter C), and message (N, j) was broadcasted by a server, say D (again, D can be A or B). 
+Now suppose the message (M, i) was broadcasted by a server, say C (C can be A or B or any other server, for more general sake, we use letter C), and message (N, j) was broadcasted by a server, say D (again, D can be A or B, or any other server). 
 
 Since i < j, we know that C broadcasted (M, i) before it received (N, j) from D, otherwise, C will adjust its logical time to be greater than j which contradicts the assumption that i < j. It follows that acknowledgement for (N,j) was sent by C after it broadcasted (M, i). 
 

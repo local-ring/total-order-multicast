@@ -13,8 +13,7 @@
             "commandsQueue" : [
                 ["deposit", 50],
                 ["interest", 1.2],
-                ["withdraw", 100],
-                ["balance"]
+                ["withdraw", 100]
             ],
 
             "Application": {
@@ -55,7 +54,8 @@
             "commandsQueue" : [
                 ["deposit", 39],
                 ["interest", 1.7],
-                ["balance"]
+                ["interest", 1.5]
+
             ],
 
             "Application": {
@@ -95,7 +95,7 @@
             "commandsQueue" : [
                 ["interest", 1.1],
                 ["withdraw", 150],
-                ["balance"]
+                ["deposit", 279]
             ],
 
             "Application": {

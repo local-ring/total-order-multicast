@@ -32,7 +32,7 @@ class ApplicationLayer:
                 while True:
                     data = connection.recv(16)
                     if data:
-                        self.receiveMessagefromMiddleware(data)
+                        self.handleMiddleware(data)
                     else:
                         break
             finally:
@@ -43,7 +43,7 @@ class ApplicationLayer:
             message = (command, value)
             socket.send(message)
 
-    def receiveMessagefromMiddleware(self, message):
+    def handleMiddleware(self, message):
         while 1:
             message = socket.recv()
             if message == ("deposit", value):
@@ -56,7 +56,8 @@ class ApplicationLayer:
                 print("Invalid message")
 
             self.commands.append(message)
-            printBalance()
+            
+        self.printBalance()
     
     def printBalance(self):
         with open('Server-{ServerID}-log.txt', 'w') as f:

@@ -43,7 +43,9 @@ Application layer:
 3. receive responses from middleware layer
 4. send responses to clients
 commandsQueue: a list of commands to be executed, such as
-    [('deposit', 100), ('withdraw', 50), ('interest', 1.2), ('balance')]
+    [('deposit', 100), ('withdraw', 50), ('interest', 1.2)]
+
+We will check the balance at the end. Since some operations are not commutative, the final balance will be most likely different if they are executed in different orders.
 """
 
 class Application:
@@ -52,6 +54,8 @@ class Application:
                  fromMiddlewareAddr,
                  commandsQueue):
         self.serverID = serverID
+        self.balance = 1000 # we assume the initial balance of the bank account of some poor guy is 1000
+        self.commands = [] # to store all commands delivered from the middleware layer
         threading.Thread(target=self.listenfromMiddleware, args=(fromMiddlewareAddr,)).start()
 
         self.commandsQueue = commandsQueue
@@ -79,52 +83,42 @@ class Application:
             data = socket.recv(1024)
             message = data.decode()
             print(f"Server {self.serverID}'s application received message: {message}")
+            self.commands.append(message)
+            operation, value = message.split(':')
+            if operation == 'deposit':
+                self.balance += value
+            elif operation == 'withdraw':
+                self.balance -= value
+            elif operation == 'interest': 
+                self.balance *= value
+            else:
+                print(f"Unknown operation: {operation} with value: {value}")
+
+            # every time, when there is an update, write the balance to the file
+            with open(f'Server{self.serverID}-log.txt', 'w') as f:
+                f.write(f"Balance: {self.balance} after commands: {self.commands[-1]}")
+
     
-        # TODO: figure out what to do with the message
-    
-    def sendtoMiddleware(self, addr, message):
+    def sendtoMiddleware(self, addr):
         """
         send message to the middleware layer
         """
-        self.ApptoMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(f"Connecting to {addr}")
-        self.ApptoMiddlewareSocket.connect(addr)
-        self.ApptoMiddlewareSocket.sendall(message.encode())
-        print(f"Server {self.serverID}'s application sent message to Middleware: {message}")
-        self.ApptoMiddlewareSocket.close()
 
-    
-    def sendCommand(self, command):
-        self.sendtoMiddleware(self.toMiddlewareAddr, command)
+        for command in self.commandsQueue:  
+            self.ApptoMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.ApptoMiddlewareSocket.connect(addr)
 
-    def deposit(self, amount):
-        message = 'deposit {}'.format(amount)
-        self.sendCommand(message)
-    
-    def withdraw(self, amount):
-        message = 'withdraw {}'.format(amount)
-        self.sendCommand(message)
+            operation, value = command[0], command[1]
+            command = f"{operation}:{value}"
 
-    def interest(self, rate):
-        message = 'interest {}'.format(rate)
-        self.sendCommand(message)
+            self.ApptoMiddlewareSocket.sendall(command.encode())
 
-    def balance(self):
-        message = 'balance'
-        self.sendCommand(message)
+            print(f"Server {self.serverID}'s application sent command to Middleware: {command}")
+            self.ApptoMiddlewareSocket.close()
 
     def run(self):
-        for command in self.commandsQueue:
-            if command[0] == 'deposit':
-                self.deposit(command[1])
-            elif command[0] == 'withdraw':
-                self.withdraw(command[1])
-            elif command[0] == 'interest':
-                self.interest(command[1])
-            elif command[0] == 'balance':
-                self.balance()
-            else:
-                print('Unknown command: {}'.format(command[0]))
+        self.sendtoMiddleware(self.toMiddlewareAddr)
+        print(f"Server {self.serverID}'s application sent all commands to Middleware")
 
 
 """
@@ -144,25 +138,33 @@ class Middleware:
                 toApplicationAddr,
                 fromApplicationAddr,
                 toNetworkAddr,
-                fromNetworkAddr):
+                fromNetworkAddr,
+                numServers):
         
         self.serverID = serverID
-
-        threading.Thread(target=self.listenfromApplication, args=(fromApplicationAddr,)).start()
-        threading.Thread(target=self.listenfromNetwork, args=(fromNetworkAddr,)).start()
 
         self.toApplicationAddr = toApplicationAddr
         self.toNetworkAddr = toNetworkAddr 
 
-
-        self.balance = 1000   # initial balance of the bank account of some poor guy
         self.queue = [] # to store all messages received
+        heapq.heapify(self.queue) # to sort the queue by timestamp
         self.queueLock = threading.Lock() # to lock the queue
-        self.acks = [] # to store all acks received
+        self.acks = {} # to store all acks received for each message, just record the number
         self.acksLock = threading.Lock() # to lock the acks
-        self.logicalTime = 0 # logical time of the server
-        self.logicalTimeLock = threading.Lock() # to lock the logical time
+        self.lamportClock = 0 # the logical time of the server
+        self.lamportClockLock = threading.Lock()
 
+        threading.Thread(target=self.listenfromApplication, args=(fromApplicationAddr,)).start()
+        threading.Thread(target=self.listenfromNetwork, args=(fromNetworkAddr,)).start()
+        threading.Thread(target=self.processQueue, args=(numServers,),).start()
+
+    
+    def updateLamportClock(self, timestamp):
+        """
+        update the logical time of the server
+        """
+        with self.lamportClockLock:
+            self.lamportClock = max(self.lamportClock, timestamp) + 1
 
     def listenfromApplication(self, addr):
         """
@@ -185,9 +187,8 @@ class Middleware:
         while 1:
             data = socket.recv(1024)
             message = data.decode()
-            print('Received message: {}'.format(message))
-            # self.multicast(message)
-            # TODO: figure out what to do with the message
+            print(f'Server{self.serverID} Received message from Application: {message}')
+            self.sendtoNetwork(self.toNetworkAddr, message) # TODO: deal with the multiple messages received at one time, maybe a parser?
 
     def listenfromNetwork(self, addr):
         """
@@ -210,23 +211,58 @@ class Middleware:
         while 1:
             data = socket.recv(1024)
             message = data.decode()
-            print('Received message: {}'.format(message))
-            # self.multicast(message)
+            print(f'Server{self.serverID} Received message from Network: {message}')
+            if message.startswith('ack'):
+                message = message.split(':')
+                operation, value, timestamp = message[0], message[1], message[2]
+                self.updateLamportClock(int(timestamp))
+                with self.acksLock:
+                    if (operation, value) in self.acks:
+                        self.acks[(operation, value)] += 1
+                    else:
+                        self.acks[(operation, value)] = 1
+            else:
+                message = message.split(':')
+                operation, value, timestamp = message[0], message[1], message[2]
+                self.updateLamportClock(int(timestamp))
+                with self.queueLock:
+                    heapq.heappush(self.queue, (timestamp, (operation, value)))
+                with self.lamportClockLock:
+                    self.lamportClock += 1
+                self.sendtoNetwork(self.toNetworkAddr, f'ack:{operation}:{value}:{self.lamportClock}')
+
+    def processQueue(self, numServers):
+        """
+        process the queue and deliver messages to the application layer
+        """
+        while 1:
+            with self.queueLock:
+                if len(self.queue) > 0:
+                    timestamp, (operation, value) = self.queue[0]
+                    with self.acksLock:
+                        if (operation, value) in self.acks and self.acks[(operation, value)] == numServers - 1:
+                            self.queue.pop(0)
+                            self.acks.pop((operation, value))
+                            self.sendtoApplication(self.toApplicationAddr, f'{operation}:{value}')
+                else:
+                    time.sleep(1)
 
 
     def sendtoApplication(self, addr, message):
         """
-        send message to the application layer
+        deliver message to the application layer
         """
-        self.MiddltoApplicationSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.MiddltoApplicationSocket.connect(addr)
-        self.MiddltoApplicationSocket.sendall(message.encode())
-        print(f"Server {self.serverID} sent message to Application: {message}")
-        self.MiddltoApplicationSocket.close()
+        with self.lamportClockLock:
+            self.lamportClock += 1
+            self.MiddltoApplicationSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.MiddltoApplicationSocket.connect(addr)
+            self.MiddltoApplicationSocket.sendall(message.encode())
+            print(f"Server {self.serverID} sent message to Application: {message}")
+            self.MiddltoApplicationSocket.close()
 
     def sendtoNetwork(self, addr, message):
         """
-        send message to the network layer
+        send message to the network layer so that it can be broadcasted
         """
         self.MiddltoNetworkSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.MiddltoNetworkSocket.connect(addr)
@@ -313,6 +349,7 @@ if __name__ == '__main__':
         data = json.load(f)
 
     servers = data['servers']
+    numServers = len(servers)
 
     # start the application layer
     applications = []
@@ -357,7 +394,8 @@ if __name__ == '__main__':
                                 toApplicationAddr=(toApplicationHost, toApplicationPort),
                                 fromApplicationAddr=(fromApplicationHost, fromApplicationPort),
                                 toNetworkAddr=(toNetworkHost, toNetworkPort),
-                                fromNetworkAddr=(fromNetworkHost, fromNetworkPort))
+                                fromNetworkAddr=(fromNetworkHost, fromNetworkPort),
+                                numServers=numServers)
         middlewares.append(middleware)
 
 
