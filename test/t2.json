@@ -11,7 +11,9 @@
             "serverID" : 1,
 
             "commandsQueue" : [
-                ["deposit", 50]
+                ["deposit", 50],
+                ["interest", 1.2],
+                ["withdraw", 100]
             ],
 
             "Application": {
@@ -50,7 +52,10 @@
             "serverID" : 2,
 
             "commandsQueue" : [
+                ["deposit", 39],
+                ["interest", 1.7],
                 ["interest", 1.5]
+
             ],
 
             "Application": {
@@ -88,7 +93,9 @@
             "serverID" : 3,
 
             "commandsQueue" : [
-                ["withdraw", 150]
+                ["interest", 1.1],
+                ["withdraw", 150],
+                ["deposit", 279]
             ],
 
             "Application": {
