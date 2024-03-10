@@ -49,6 +49,15 @@ commandsQueue: a list of commands to be executed, such as
 We will check the balance at the end. Since some operations are not commutative, the final balance will be most likely different if they are executed in different orders.
 """
 
+
+def keepSocketAlive(socket):
+    """
+    Keep the send socket alive otherwise it will be closed by the system if idle for too long
+    But we still need it sometimes when there are new commands to be sent
+    """
+    while 1:
+        socket.sendall(b'')
+
 class Application:
     def __init__(self, serverID, 
                  toMiddlewareAddr,
@@ -125,6 +134,7 @@ class Application:
             self.ApptoMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.ApptoMiddlewareSocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             self.ApptoMiddlewareSocket.connect(addr)
+            threading.Thread(target=keepSocketAlive, args=(self.ApptoMiddlewareSocket,)).start()
   
         for command in self.commandsQueue:  
             operation, value = command[0], command[1]
@@ -222,11 +232,10 @@ class Middleware:
                 operation, value = message[0], message[1]
                 with self.lamportClockLock:
                     self.lamportClock += 1
-                    broadcastMessage = f'{operation}:{value}:{self.lamportClock}\n' # release the lock as soon as possible)
+                    broadcastMessage = f'{operation}:{value}:{self.lamportClock}:{self.serverID}\n' # release the lock as soon as possible)
                     # with self.queueLock:
                     #     heapq.heappush(self.queue, (self.lamportClock, (operation, value)))
                     self.sendtoNetwork(self.toNetworkAddr, broadcastMessage) # if do this after releasing the lock, maybe mess up the FIFO
-
 
     def listenfromNetwork(self, addr):
         """
@@ -259,27 +268,27 @@ class Middleware:
                 print(f'Server{self.serverID} received message from Network: {message}')
                 if message.startswith('ack'):
                     message = message.split(':')
-                    operation, value, timestamp = message[1], message[2], message[3]
+                    msgtimestamp, id, operation, value, timestamp = message[1], message[2], message[3], message[4], message[5]
 
                     self.updateLamportClock(int(timestamp)) # update the logical time of the server because it is an event
 
                     with self.acksLock:
-                        if (operation, value) in self.acks:
-                            self.acks[(operation, value)] += 1
+                        if (msgtimestamp, id, operation, value) in self.acks:
+                            self.acks[(msgtimestamp, id, operation, value)] += 1
                         else:
-                            self.acks[(operation, value)] = 1
+                            self.acks[(msgtimestamp, id, operation, value)] = 1
                 else:
                     message = message.split(':')
                     # print(message)
-                    operation, value, timestamp = message[0], message[1], message[2]
+                    operation, value, timestamp, id = message[0], message[1], message[2], message[3]
 
                     self.updateLamportClock(int(timestamp))
 
                     with self.queueLock:
-                        heapq.heappush(self.queue, (timestamp, (operation, value)))
+                        heapq.heappush(self.queue, (timestamp, id, (operation, value)))
                     with self.lamportClockLock:
                         self.lamportClock += 1
-                        broadcastAck = f'ack:{operation}:{value}:{self.lamportClock}\n'
+                        broadcastAck = f'ack:{timestamp}:{id}:{operation}:{value}:{self.lamportClock}\n'
                         self.sendtoNetwork(self.toNetworkAddr, broadcastAck)
 
     def processQueue(self, numServers):
@@ -289,10 +298,10 @@ class Middleware:
         while 1:
             with self.queueLock:
                 if len(self.queue) > 0:
-                    timestamp, (operation, value) = self.queue[0]
+                    timestamp, id, (operation, value) = self.queue[0]
                     with self.acksLock:
-                        if (operation, value) in self.acks and self.acks[(operation, value)] == numServers:
-                            _, (operation, value) = heapq.heappop(self.queue)
+                        if (timestamp, id, operation, value) in self.acks and self.acks[(timestamp, id, operation, value)] == numServers:
+                            _, _, (operation, value) = heapq.heappop(self.queue)
 
                             self.sendtoApplication(self.toApplicationAddr, f'{operation}:{value}\n')
             # time.sleep(1)
@@ -308,6 +317,7 @@ class Middleware:
             self.MiddltoApplicationSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.MiddltoApplicationSocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             self.MiddltoApplicationSocket.connect(addr)
+            threading.Thread(target=keepSocketAlive, args=(self.MiddltoApplicationSocket,)).start()
 
         self.MiddltoApplicationSocket.sendall(message.encode())
         print(f"Server-{self.serverID} sent message to Application: {message[:-1]}")
@@ -321,6 +331,7 @@ class Middleware:
             self.MiddltoNetworkSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.MiddltoNetworkSocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             self.MiddltoNetworkSocket.connect(addr)
+            threading.Thread(target=keepSocketAlive, args=(self.MiddltoNetworkSocket,)).start()
 
         self.MiddltoNetworkSocket.sendall(message.encode())
         print(f"Server-{self.serverID} sent message to Network: {message[:-1]}") # not in the mood to print the newline character
@@ -361,13 +372,13 @@ class Network:
         self.NetworkfromMiddlewareSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.NetworkfromMiddlewareSocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         self.NetworkfromMiddlewareSocket.bind(addr)
-        self.NetworkfromMiddlewareSocket.listen()
+        self.NetworkfromMiddlewareSocket.listen(numServers*2)
         print(f"Network start listening from Servers' Middleware on port {addr}")
 
         while 1:
             sock, addr = self.NetworkfromMiddlewareSocket.accept()
-            with self.fromConnectionsLock:
-                self.fromConnections.append(sock)
+            # with self.fromConnectionsLock:
+            #     self.fromConnections.append(sock)
             threading.Thread(target=self.handleMiddleware, args=(sock, addr)).start()
 
     def handleMiddleware(self, socket, addr):
@@ -376,23 +387,23 @@ class Network:
         """
         buffer = ''
         while 1:
-            try:
-                data = socket.recv(1024)
-                if not data:
-                    continue
-                data = data.decode()
-                buffer += data
-                messages = buffer.split('\n')
-                buffer = messages.pop()
-                for message in messages:
-                    print(f'Network layer received message: {message}')
-                    for server in self.serverList:
-                        serverID, fromNetworkHost, fromNetworkPort = server[0], server[1], server[2]
-                        self.sendtoMiddleware(serverID, (fromNetworkHost, fromNetworkPort), message + '\n')
-            except Exception as e:
-                print(e)
-            finally:
-                break # the middleware idle for too long, means all messages are received
+            # try:
+            data = socket.recv(1024)
+            if not data:
+                continue
+            data = data.decode()
+            buffer += data
+            messages = buffer.split('\n')
+            buffer = messages.pop()
+            for message in messages:
+                print(f'Network layer received message: {message}')
+                for server in self.serverList:
+                    serverID, fromNetworkHost, fromNetworkPort = server[0], server[1], server[2]
+                    self.sendtoMiddleware(serverID, (fromNetworkHost, fromNetworkPort), message + '\n')
+            # except Exception as e:
+            #     print(e)
+            # finally:
+            #     break # the middleware idle for too long, means all messages are received
 
             
     def sendtoMiddleware(self, id, addr, message):
@@ -404,10 +415,10 @@ class Network:
                 self.toConnections[id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.toConnections[id].setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
                 self.toConnections[id].connect(addr)
+                threading.Thread(target=keepSocketAlive, args=(self.toConnections[id],)).start()
 
             self.toConnections[id].sendall(message.encode())
             print(f"Network sent message to Server-{id}'s Middleware: {message[:-1]}") # not in the mood to print the newline character
-        # NetworktoMiddlewareSocket.close()
 
     # def run(self):
     #     for middleware in self.serverList:

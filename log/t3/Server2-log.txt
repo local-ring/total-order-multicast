@@ -1,0 +1,1 @@
+Balance: 2012.0 after commands: [('deposit', 1.0), ('deposit', 1.0), ('deposit', 1.0), ('deposit', 1.0), ('deposit', 1.0), ('deposit', 1.0), ('interest', 2.0)]

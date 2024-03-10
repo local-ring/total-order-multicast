@@ -1,0 +1,164 @@
+> python broadcast.py t2.json
+Server-1's application start listening from Middleware on port ('127.0.0.1', 3003)
+Server-2's application start listening from Middleware on port ('127.0.0.1', 3006)
+Server-3's application start listening from Middleware on port ('127.0.0.1', 3009)
+Server-1's Middleware start listening from Application on port ('127.0.0.1', 3002)
+Server-1's Middleware start listening from Network on port ('127.0.0.1', 3004)
+Server-2's Middleware start listening from Application on port ('127.0.0.1', 3005)
+Server-2's Middleware start listening from Network on port ('127.0.0.1', 3007)
+Server-3's Middleware start listening from Application on port ('127.0.0.1', 3008)
+Server-3's Middleware start listening from Network on port ('127.0.0.1', 3010)
+Network start listening from Servers' Middleware on port ('localhost', 3001)
+Server-1's application sent command to Middleware: deposit:50
+Server-1 received message from Application: deposit:50
+Server-1's application sent command to Middleware: interest:1.2
+Server-1's application sent command to Middleware: withdraw:100
+Server-1's application sent all commands to Middleware
+Server-1 sent message to Network: deposit:50:1
+Network layer received message: deposit:50:1
+Server-2 received message from Application: deposit:39
+Server-2's application sent command to Middleware: deposit:39
+Network sent message to Server-1's Middleware: deposit:50:1
+Server-2 sent message to Network: deposit:39:1
+Network layer received message: deposit:39:1
+Server1 received message from Network: deposit:50:1
+Server-2's application sent command to Middleware: interest:1.7
+Network sent message to Server-2's Middleware: deposit:50:1
+Server-2 received message from Application: interest:1.7
+Server-1 received message from Application: interest:1.2
+Server-2's application sent command to Middleware: interest:1.5
+Server2 received message from Network: deposit:50:1
+Network sent message to Server-3's Middleware: deposit:50:1
+Network layer received message: ack:deposit:50:3
+Server-2 sent message to Network: interest:1.7:2
+Server3 received message from Network: deposit:50:1
+Server-2's application sent all commands to Middleware
+Network layer received message: interest:1.7:2
+Server-1 sent message to Network: ack:deposit:50:3
+Server-2 sent message to Network: ack:deposit:50:4
+Network sent message to Server-1's Middleware: deposit:39:1
+Network layer received message: ack:deposit:50:3
+Server-3 sent message to Network: ack:deposit:50:3
+Server2 received message from Network: deposit:39:1
+Network sent message to Server-2's Middleware: deposit:39:1
+Server-3's application sent command to Middleware: interest:1.1
+Server1 received message from Network: deposit:39:1
+Network layer received message: ack:deposit:50:4
+Server-2 received message from Application: interest:1.5
+Server-1 sent message to Network: interest:1.2:4
+Network layer received message: ack:deposit:39:6
+Server-3 received message from Application: interest:1.1
+Network sent message to Server-3's Middleware: deposit:39:1
+Network layer received message: interest:1.2:4
+Server-2 sent message to Network: ack:deposit:39:6
+Server3 received message from Network: deposit:39:1
+Network sent message to Server-1's Middleware: ack:deposit:50:3
+Network layer received message: ack:deposit:39:6
+Server-1 sent message to Network: ack:deposit:39:6
+Server-1 received message from Application: withdraw:100
+Network sent message to Server-2's Middleware: ack:deposit:50:3
+Server-3's application sent command to Middleware: withdraw:150
+Network layer received message: interest:1.5:7
+Server-3's application sent command to Middleware: deposit:279
+Server-3's application sent all commands to Middleware
+Network sent message to Server-3's Middleware: ack:deposit:50:3
+Server1 received message from Network: ack:deposit:50:3
+Server-2 sent message to Network: interest:1.5:7
+Network layer received message: interest:1.1:4
+Server-3 sent message to Network: interest:1.1:4
+Network layer received message: withdraw:100:7
+Server-1 sent message to Network: withdraw:100:7
+Server2 received message from Network: ack:deposit:50:3
+Network sent message to Server-1's Middleware: ack:deposit:50:4
+Server-3 received message from Application: withdraw:150
+Network sent message to Server-2's Middleware: ack:deposit:50:4
+Server1 received message from Network: ack:deposit:50:4
+Network sent message to Server-3's Middleware: ack:deposit:50:4
+Server-3 sent message to Network: ack:deposit:39:6
+Server2 received message from Network: ack:deposit:50:4
+Network layer received message: ack:deposit:39:6
+Server3 received message from Network: ack:deposit:50:3
+Server1 received message from Network: ack:deposit:39:6
+Network sent message to Server-1's Middleware: ack:deposit:39:6
+Network layer received message: withdraw:150:7
+Network sent message to Server-2's Middleware: ack:deposit:39:6
+Server-3 sent message to Network: withdraw:150:7
+Server-3 received message from Application: deposit:279
+Server2 received message from Network: ack:deposit:39:6
+Server3 received message from Network: ack:deposit:50:4
+Network sent message to Server-1's Middleware: interest:1.5:7
+Network layer received message: deposit:279:9
+Server1 received message from Network: interest:1.5:7
+Server-3 sent message to Network: deposit:279:9
+Network sent message to Server-1's Middleware: interest:1.7:2
+Network sent message to Server-2's Middleware: interest:1.7:2
+Server2 received message from Network: interest:1.7:2
+Network sent message to Server-3's Middleware: interest:1.7:2
+Server3 received message from Network: interest:1.7:2
+Network layer received message: ack:interest:1.5:12
+Network sent message to Server-1's Middleware: ack:deposit:39:6
+Server-2 sent message to Network: ack:interest:1.7:12
+Network layer received message: ack:interest:1.7:12
+Server-3 sent message to Network: ack:interest:1.7:12
+Server-1 sent message to Network: ack:interest:1.5:12
+Network layer received message: ack:interest:1.7:12
+Server2 received message from Network: ack:deposit:39:6
+Network sent message to Server-2's Middleware: ack:deposit:39:6
+Server1 received message from Network: interest:1.7:2
+Server3 received message from Network: ack:deposit:39:6
+Network sent message to Server-3's Middleware: ack:deposit:39:6
+Server-1 sent message to Network: ack:interest:1.7:14
+Server1 received message from Network: ack:deposit:39:6
+Network layer received message: ack:interest:1.7:14
+Server1 received message from Network: ack:deposit:50:3
+Network sent message to Server-1's Middleware: ack:deposit:50:3
+Server2 received message from Network: ack:deposit:50:3
+Network sent message to Server-2's Middleware: ack:deposit:50:3
+Network sent message to Server-3's Middleware: ack:deposit:50:3
+Server3 received message from Network: ack:deposit:50:3
+Server2 received message from Network: interest:1.5:7
+Network sent message to Server-2's Middleware: interest:1.5:7
+Network sent message to Server-3's Middleware: interest:1.5:7
+Network sent message to Server-1's Middleware: interest:1.1:4
+Server3 received message from Network: interest:1.5:7
+Server1 received message from Network: interest:1.1:4
+Server-2 sent message to Network: ack:interest:1.5:16
+Network sent message to Server-2's Middleware: interest:1.1:4
+Server2 received message from Network: interest:1.1:4
+Network layer received message: ack:interest:1.5:16
+Network sent message to Server-3's Middleware: interest:1.1:4
+Server-3 sent message to Network: ack:interest:1.5:16
+Server3 received message from Network: interest:1.1:4
+Network sent message to Server-1's Middleware: interest:1.2:4
+Server-1 sent message to Network: ack:interest:1.1:18
+Network sent message to Server-2's Middleware: interest:1.2:4
+Server-2 sent message to Network: ack:interest:1.1:18
+Server2 received message from Network: interest:1.2:4
+Network sent message to Server-3's Middleware: interest:1.2:4
+Network layer received message: ack:interest:1.1:18
+Network layer received message: ack:interest:1.5:16
+Server1 received message from Network: interest:1.2:4
+Network layer received message: ack:interest:1.1:18
+Network sent message to Server-1's Middleware: ack:deposit:39:6
+Network sent message to Server-1's Middleware: ack:interest:1.7:14
+Network sent message to Server-2's Middleware: ack:interest:1.7:14
+Network sent message to Server-3's Middleware: ack:interest:1.7:14
+Network sent message to Server-1's Middleware: deposit:279:9
+Network layer received message: ack:interest:1.1:18
+Server-3 sent message to Network: ack:interest:1.1:18
+Network sent message to Server-2's Middleware: deposit:279:9
+Server3 received message from Network: interest:1.2:4
+Network sent message to Server-3's Middleware: deposit:279:9
+Server-2 sent message to Network: ack:interest:1.2:20
+Network layer received message: ack:interest:1.2:20
+Network layer received message: ack:interest:1.2:20
+Server-1 sent message to Network: ack:interest:1.2:20
+Server2 received message from Network: ack:interest:1.7:14
+Server1 received message from Network: ack:deposit:39:6
+Server2 received message from Network: deposit:279:9
+Network sent message to Server-1's Middleware: ack:interest:1.5:16
+Network layer received message: ack:interest:1.2:20
+Server1 received message from Network: ack:interest:1.7:14
+Network sent message to Server-2's Middleware: ack:interest:1.5:16
+Server-1 sent message to Application: deposit:39
+Server-1's application received message: deposit:39
