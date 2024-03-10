@@ -1,1 +1,0 @@
-Balance: 1500.0 after commands: [('deposit', 50.0), ('deposit', 50.0), ('interest', 1.5), ('withdraw', 150.0)]
