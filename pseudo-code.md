@@ -6,7 +6,10 @@
 We use the bank model mentioned in the slide and the textbook: there are muliple servers in different places, say San Fransico, New York, etc. Each server has an application layer which send command like (deposit, 10), (interest, 1.2) to the middleware layer. Each middleware layer will send/receive message and acknowledgement to all other servers' middleware through the network layer (there is only one network layer in total).
 
 The below diagram display the structure of the system:
-TODO: A picture here
+![structure](structure.jpg)
+
+Note the pseudo code below have some simplification and different with the actual implementation. The actual implementation is in the `lamport.py` file. The pseudo code was not updated when I modified the actual implementation (like locks, more complicated queue elements, the order of establishing sockets, daemon thread sending empty packets using temporarily idling sockets to keep it alive) to fix the issue found during testing. The pseudo code was written before the actual implementation and was used as a guide (my naive plan) to write the actual implementation.
+
 
 ### Application Layer
 
@@ -56,7 +59,7 @@ class ApplicationLayer:
                 print("Invalid message")
 
             self.commands.append(message)
-            
+
         self.printBalance()
     
     def printBalance(self):
@@ -138,7 +141,6 @@ class Middleware:
 
     def receiveMessagefromApplication(self, message):
         self.lamportClock += 1
-        self.messageQueue.append(message)
         self.sendMessagetoNetwork(message)
     
     def receiveMessagefromNetwork(self, message):
@@ -153,7 +155,7 @@ class Middleware:
         while 1:
             if self.messageQueue:
                 message = self.messageQueue[0]
-                if self.acknowledgement[message]== number_of_servers-1:
+                if self.acknowledgement[message]== number_of_servers:
                     self.deliverMessage(message)
 
     def deliverMessage(self, message):
